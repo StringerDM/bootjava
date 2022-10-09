@@ -12,7 +12,7 @@
   <summary>1. Основы Spring Boot</summary>
     1.1	Создаем проект через Spring Initializer
     
-    Commit: https://github.com/StringerDM/bootjava/commit/35a21d499357b464ebb5b571cb97ac0bc5e57f01
+    commit: https://github.com/StringerDM/bootjava/commit/35a21d499357b464ebb5b571cb97ac0bc5e57f01
     
     -   Подключаем зависимости:
     -   Lombock
@@ -187,8 +187,8 @@
           #    tcp: jdbc:h2:tcp://localhost:9092/~/voting
           h2.console.enabled: true
 
-!!! если у вас версия spring-boot 2.5.0 и выше, добавьте в application.yaml: !!!
-spring.jpa.defer-datasource-initialization: true
+    если у вас версия spring-boot 2.5.0 и выше, добавьте в application.yaml:
+    spring.jpa.defer-datasource-initialization: true
 
     Чтобы поднять H2 TCP сервер мы делаем конф. класс и объявляем там
           @Bean(initMethod = "start", destroyMethod = "stop")
@@ -224,13 +224,41 @@ spring.jpa.defer-datasource-initialization: true
     
     2.3 Рефакторинг model. Spring Data JPA @Query
     
+    commit: https://github.com/StringerDM/bootjava/commit/f789d22071f65c732533c9b512015e8a05b8ede5
+    Заменим стандартный AbstractPersistable собственным классом BaseEntity:
+        @Access(AccessType.FIELD)
+        Здесь объявляем чтобы hibernate работал с entity по полям - https://stackoverflow.com/a/6084701/548473
+    Методы тип isNew() не нужно помечать что они transient.
+    Методы equals и hashCode сделаны попроще. 
+    И в equal эту строчку взяли из класса AbstractPersistable:
     
-    
+        if (o == null || !getClass().equals(ProxyUtils.getUserClass(o))) {
+        return false;
+        }
+
+    Т.к. hibernate может проектировать классы и перед сравнением их нужно развернуть.
+    Ссылка как правильно в Entity hibernate переопределять equals и hashCode (очень частая ошибка)
+    https://stackoverflow.com/questions/1638723
+
+    По правилам рекомендуется делать уникальное неизменяемое бизнес поле, а обычно такого нет и во всех проектах использовался primary key. На primary key сделали @GeneratedValue(strategy = GenerationType.IDENTITY) как у нас и генирурется на данный момент, поэтому в файле конфигурации id.new_generator_mappings: false уже не требуется.
+
+    Все наши Entity классы будем наследовать он BaseEntity.
+
+    interface UserRepository {
+    В репозиториях в запросе @Query для именованных параметров (:email) теперь в методе можно не указывать аннотацию @Param(“email”), hibernate теперь берет имя параметра через отражение.
+
+        @Query("SELECT u FROM User u WHERE u.email = LOWER(:email)")
+        Optional<User> findByEmailIgnoreCase(String email);
+    }
+
+    Также как и в контроллерах в аннотациях @Pasthariable и @RequestParam атрибуты nameValue не требуется.
+
 </details>
 <details>
-  <summary>1 Основы Spring Boot</summary>
+  <summary>3 Spring Data REST + HATEOAS</summary>
 
 Ссылки: 
 
 Commit: 
 </details>
+
