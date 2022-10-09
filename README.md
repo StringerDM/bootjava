@@ -11,6 +11,9 @@
 <details>
   <summary>1. Основы Spring Boot</summary>
     1.1	Создаем проект через Spring Initializer
+    
+    Commit: https://github.com/StringerDM/bootjava/commit/35a21d499357b464ebb5b571cb97ac0bc5e57f01
+    
     -   Подключаем зависимости:
     -   Lombock
     -   Spring Web
@@ -22,8 +25,6 @@
     Ссылки: 
     Spring Initializrs: https://start.spring.io/
 
-    Commit: https://github.com/StringerDM/bootjava/commit/35a21d499357b464ebb5b571cb97ac0bc5e57f01
-
     1.2	Spring Boot maven plugin. Конвертация в WAR
   
     Ссылки:
@@ -33,6 +34,9 @@
     Готовый проект с патчами находится в ветке patched:   git clone --branch patched https://github.com/JavaOPs/bootjava.git
 
     1.4 Проект Lombok
+   
+    Commit: https://github.com/StringerDM/bootjava/commit/ef6cdb5d5fb182bf1387e77206ddf174ce4ed005 
+    
     В Pom.xml он уже у нас есть, причем <optional> true </optional>:
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -69,13 +73,14 @@
 
     Ссылки: Фичи Lombok https://urvanov.ru/2015/09/22/project-lombok/
 
-    Commit: https://github.com/StringerDM/bootjava/commit/ef6cdb5d5fb182bf1387e77206ddf174ce4ed005 
-
 </details>
 
 <details>
   <summary>2. Работа с DB (H2, Spring Data JPA)</summary>
     2.1	Spring Data JPA. ApplicationRunner
+    
+    Commit: https://github.com/StringerDM/bootjava/commit/530474b5f8ac9f85dd89284476fcb42685cb7aba
+        
     В проекте у нас уже есть подключенный spring-boot-starter-data-jpa, также подключина БД H2 и при запуске sping boot уже может сразу поднять БД с настройками по умолчанию. База embedded т.е. она работает в тойже JVM что и наше приложение и по умолчанию spring boot создает ее прямо и entites (классы отмеченные @Entity).
     
     Добавляем требуемые аннотации в модель для валидации, названия таблиц и колонок (не обязательно, по умолчанию по имени полей). См. commit.
@@ -97,7 +102,7 @@
     
     Для ролей мы не делаем отдельное entity а указываем их как @ElementCollection(fetch = FetchType.EAGER)
     
-    C spring boot v2.3 убрали валидацию по умолчанию, поэтому добавили в pom.xml:
+    Cо spring boot v2.3 убрали валидацию по умолчанию, поэтому добавили в pom.xml:
     
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -108,7 +113,7 @@
     
     В aplication.property сделаем одну настройку (Common application Data properties - https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#data-properties все настройки spring boot и по ключевому слов JPA мы можем найти все конфигурационный классы и что можно объявлять):
     
-    spring.jpa.show-sql=true - для отображения запросов в базу.
+    spring.jpa.show-sql=true - для отображения запросов в базу. (это крайне полезно для Hibernate во время разработки).
     
     Запускаем приложение и смотрим как наша таблица создается. По умолчанию для embedded БД таблицы сначало дропаются, затем создается общий для всех hibernate siquence и создаются таблицы.
     
@@ -122,10 +127,104 @@
     //инжектим userRepository через аннотацию @AllArgsConstructor
     private final UserRepository userRepository;
     
-    Ссылки: :
+    //вставляем в базу 2х юзеров:
     
+    @Override
+    public void run(ApplicationArguments args) {
+        userRepository.save(new User("user@gmail.com", "User_First", "User_Last", "password", Set.of(Role.ROLE_USER)));
+        userRepository.save(new User("admin@javaops.ru", "Admin_First", "Admin_Last", "admin", Set.of(Role.ROLE_USER, Role.ROLE_ADMIN)));
+    }
+    
+    Запускаем приложение и видимо что Hibernat делает 3 запроса, 1м он достает 2х юзеров и потом на каждого юзера он достает роли. Это измвестная проблема n+1, если бы у нас было 10 тысяч юзеров то Hibernate сгенерил бы 10 001 запрос.
+    Проблема N+1. Стратегии загрузки коллекций
+      N+1 selects issue https://stackoverflow.com/questions/97197/548473
+      в JPA             https://dou.ua/lenta/articles/jpa-fetch-types/
+      в Hibernate       https://dou.ua/lenta/articles/hibernate-fetch-types/
+      если ссылки выше не открываются: Runet Censorship Bypass https://chrome.google.com/webstore/detail/%D0%BE%D0%B1%D1%85%D0%BE%D0%B4-%D0%B1%D0%BB%D0%BE%D0%BA%D0%B8%D1%80%D0%BE%D0%B2%D0%BE%D0%BA-%D1%80%D1%83%D0%BD%D0%B5%D1%82%D0%B0/npgcnondjocldhldegnakemclmfkngch    
+    В TopJava мы решали её тремя сопособами:
+      - Через fetch Join
+      - Entity Graff
+      - И для ролей в Юзере мы делали @BatchSize(size = 20)
+      
+    В Hibernate есть настрока которая позволяет выставлять batch size глобально для всего приложения. 
+      Hibernate configurations - http://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#configurations - по ссылке можно найти настройку spring.jpa.properties.hibernate.default_batch_fetch_size=20 (укажем 20 по размеру колонок в таблице на странице).    
+      hibernate.jdbc.fetch_size vs hibernate.jdbc.batch_size - https://stackoverflow.com/questions/21257819/548473
+    
+    Также добавим spring.jpa.properties.hibernate.format_sql=true - форматирование sql запросов в выводе (запросы читать легче)
+    и spring.jpa.properties.hibernate.jdbc.batch_size=20 это количество в баче апрдейтов и инсертов хибернейта.
+    # https://stackoverflow.com/questions/21257819/what-is-the-difference-between-hibernate-jdbc-fetch-size-and-hibernate-jdbc-batc
+    
+    И последняя настройка, если мы посмотрим на лог то мы увидим Warning - spring.jpa.open-in-view is enabled by default и нужно его выключить:
+    spring.jpa.open-in-view=false
+    Open Session In View Anti-Pattern - # https://vladmihalcea.com/the-open-session-in-view-anti-pattern/
+    spring.jpa.open-in-view - # https://stackoverflow.com/a/48222934/548473
+    Это антипаттерн - если в модели при преобразовании view остались какието не проинициализированный поля которые lazy proxy то открывается транзакция и делаются еще дополнительный запросы в базу чтобы проинициализировать эти поля.
+    Запускаем приложение и смотрим на отработку запроса findAll и видем что теперь только 2 запроса.1й для юзеров и 1 запрос для всех ролей. Если юзеров будет много то роли будут доставаться пачками по 20 юзеров.
+    
+    2.2 H2. Популирование и конфигурирование
+    
+    Commit: https://github.com/StringerDM/bootjava/commit/2e03672e1984c941211e37256e7b07eaea5445a3
+        
+    Открытая СУБД написанная полностью на Java не смотря на малый размер, поддерживает много возможностей... 
+    
+    Первое что мы сделаем это перейдем с формата .properties на формат .yaml 
+    Явно объявим то что было по дефолту 
+    Встроенная база 
+          hibernate:
+            ddl-auto: create-drop
+          datasource:
+            url: jdbc:h2:mem:voting
+            username: sa
+            password:
+          #    tcp: jdbc:h2:tcp://localhost:9092/mem:voting
+          # Absolute path
+          #    url: jdbc:h2:C:/projects/bootjava/restorant-voting/db/voting
+          #    tcp: jdbc:h2:tcp://localhost:9092/C:/projects/bootjava/restorant-voting/db/voting
+          # Relative path form current dir
+          #    url: jdbc:h2:./db/voting
+          # Relative path from home
+          #    url: jdbc:h2:~/voting
+          #    tcp: jdbc:h2:tcp://localhost:9092/~/voting
+          h2.console.enabled: true
 
-    Commit: https://github.com/StringerDM/bootjava/commit/530474b5f8ac9f85dd89284476fcb42685cb7aba
+!!! если у вас версия spring-boot 2.5.0 и выше, добавьте в application.yaml: !!!
+spring.jpa.defer-datasource-initialization: true
+
+    Чтобы поднять H2 TCP сервер мы делаем конф. класс и объявляем там
+          @Bean(initMethod = "start", destroyMethod = "stop")
+          public Server h2Server() throws SQLException {
+              log.info("Start H2 TCP server");
+              return Server.createTcpServer("-tcp", "-tcpAllowOthers", "-tcpPort", "9092");
+          }
+
+    При этом в pom нам нужно убрать runtime зависимости h2 потомучто классы h2 теперь понадобились на этапе компиляции.
+    
+    Запускаем приложение и подключаемся к базе через idea. Если мы попробуем приконектится по url то ничего не выйдет, конект пройдет но если мы на неё посмотрим то никаких баз не увидим. База данных к которой мы приконектились поднимается в памяти в процессе JVM idea и никакой отношение к БД приложения не имеет. Поэтому мы подняли TCP сервер чтобы мы могли приконектится извне - jdbc:h2:tcp://localhost:9092/mem:voting
+    
+    Подключаемся к базе и делаем интеграцию с Idea выбирая в persistence/springboot -> data source – H2.
+    
+    H2 console также доступна по http://localhost:8080/h2-console
+    
+    Давайте пропопулируем нашу БД не через приложение а через скрипт как это обычно делается.
+    Из applicationRunner удаляем save user и добавляем в ресурсы файл data.sql где популируем users и userRoles (у spring boot 2 файла который он автоматически исполняет data.sql и schema.sql schema нам не требуется т.к. за создание схемы базы отвечает hibernate).
+    Loading Initial Data https://www.baeldung.com/spring-boot-data-sql-and-schema-sql
+    Запускаем приложение и сталкиваемся с проблемой что ID у нас должно быть NotNull но оно автоматически не генерится. Смотрим на лог генерации таблицы и видимо что ID сгенерировалось как обычное поле.
+    H2: NULL not allowed for column “ID”  - https://stackoverflow.com/a/54697387/548473
+    Смотрим решение проблемы на stackoverflow и видим 3 варианта:
+    
+      1.	Поменять @GeneratedValue с авто, как у нас в наследуемом AbstractPersistable классе на
+      change @GeneratedValue to strategy = GenerationType.IDENTITY
+
+      2.	Set spring.jpa.properties.hibernate.id.new_generator_mappings=false (spring-boot alias spring.jpa.hibernate.use-new-id-generator-mappings) это означает      
+      работу по старой стратегии не по sequence а по identity 
+
+      3.	insert with nextval: INSERT INTO TABLE(ID, ...) VALUES (hibernate_sequence.nextval, ...) – вставлять в базу ID сгенерированный hibernate.
+     
+    Для нас самое просто использовать 2й вариант. Теперь все работает. Со старой стратегии ID генерится как identity.
+    
+    2.3 Рефакторинг model. Spring Data JPA @Query
+    
+    
     
 </details>
 <details>
