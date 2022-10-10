@@ -17,7 +17,7 @@ spring:
     url: jdbc:h2:mem:voting
     #    tcp: jdbc:h2:tcp://localhost:9092/mem:voting
     # Absolute path
-    #    url: jdbc:h2:C:/projects/bootjava/restorant-voting/db/voting
+    #    url: jdbc:h2:E:/projects/bootjava/restorant-voting/db/voting
     #    tcp: jdbc:h2:tcp://localhost:9092/C:/projects/bootjava/restorant-voting/db/voting
     # Relative path form current dir
     #    url: jdbc:h2:./db/voting
@@ -27,3 +27,8 @@ spring:
     username: sa
     password:
   h2.console.enabled: true
+
+  data.rest:
+    #  https://docs.spring.io/spring-data/rest/docs/current/reference/html/#getting-started.basic-settings
+    basePath: /api
+    returnBodyOnCreate: true
