@@ -240,12 +240,16 @@
     Ссылка как правильно в Entity hibernate переопределять equals и hashCode (очень частая ошибка)
     https://stackoverflow.com/questions/1638723
 
-    По правилам рекомендуется делать уникальное неизменяемое бизнес поле, а обычно такого нет и во всех проектах использовался primary key. На primary key сделали @GeneratedValue(strategy = GenerationType.IDENTITY) как у нас и генирурется на данный момент, поэтому в файле конфигурации id.new_generator_mappings: false уже не требуется.
+    По правилам рекомендуется делать уникальное неизменяемое бизнес поле, а обычно такого нет и во всех 
+    проектах использовался primary key. На primary key сделали @GeneratedValue(strategy = GenerationType.IDENTITY) 
+    как у нас и генирурется на данный момент, поэтому в файле конфигурации id.new_generator_mappings: false уже не 
+    требуется.
 
     Все наши Entity классы будем наследовать он BaseEntity.
 
     interface UserRepository {
-    В репозиториях в запросе @Query для именованных параметров (:email) теперь в методе можно не указывать аннотацию @Param(“email”), hibernate теперь берет имя параметра через отражение.
+    В репозиториях в запросе @Query для именованных параметров (:email) теперь в методе можно не указывать аннотацию 
+    @Param(“email”), hibernate теперь берет имя параметра через отражение.
 
         @Query("SELECT u FROM User u WHERE u.email = LOWER(:email)")
         Optional<User> findByEmailIgnoreCase(String email);
@@ -256,9 +260,175 @@
 </details>
 <details>
   <summary>3 Spring Data REST + HATEOAS</summary>
+  3.1 Spring Data REST
+  
+  commit: https://github.com/StringerDM/bootjava/commit/8671606a67ce4d9e57da95c30c0a736508804e0f
+  
+  Оживим наше приложение, добавим зависимость
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-rest</artifactId>
+        </dependency>
+  
+  Теперь в браузере стали доступны следующие странички:
+  GET http://localhost:8080/api
+  GET http://localhost:8080/api/users
+  GET http://localhost:8080/api/users/1
+  GET http://localhost:8080/api/users/search
+  GET http://localhost:8080/api/users/search/by-email?email=User@gmail.com
+  GET http://localhost:8080/api/users/search/by-lastname?lastName=Admin
+  GET http://localhost:8080/api/users/search/by-lastname?lastName=last
+  POST http://localhost:8080/api/users
+  Content-Type: application/json
 
-Ссылки: 
+  {
+   "email": "test@test.com",
+   "firstName": "Test",
+   "lastName": "Test",
+   "password": "test",
+   "roles": [ "ROLE_USER"]
+  }
 
-Commit: 
+  ###
+  PATCH http://localhost:8080/api/users/1
+  Content-Type: application/json
+
+  {
+    "lastName": "User+Last"
+  }
+  
+  Spring Data Rest - это модуль который входит в семейство Spring Data, анализирует репозитории и доменную модель и 
+  проанализированный результат выставляет наружу через контроллеры как hypermedia driven HTTP resources. 
+  
+  Понимание HATEOAS (Hypermedia as the Engine of Application State) - http://spring-projects.ru/understanding/hateoas/
+  Это правило создания REST приложений когда нам возвращаются не только результаты но и еще URL на ресурсы. 
+  Все данные представляются как набор ресурсов, к ним есть URL и в более сложном случае к нам возвращается набор разных 
+  URL по которым мы можем достать все возможные в данном контексте ресурсы. Таким образом мы можем общаться с сервисом 
+  без спецификации, все действия с резурсами на клиенте производятся через URL. 
+  Id на клиенте не выводится - Spring Data REST expose ids - https://stackoverflow.com/questions/24936636/548473/33744785#33744785
+  
+  Сделаем небольшую кастомизацию. 
+  Spring Data REST settings - https://docs.spring.io/spring-data/rest/docs/current/reference/html/#getting-started.basic-settings
+  По ссылке есть различные настройки, по которым мы можем менять поведение Data Rest:
+  Сделаем:
+    data.rest:
+      basePath: /api
+      returnBodyOnCreate: true // возращать дело при создании ресурса.
+  
+  В низу http://localhost:8080/api/users Spring Data Rest также нам выставил ссылку по которой мы можем делать операции с users:
+  http://localhost:8080/api/users/search
+  Он проанализировал методы репозитория и выставил их наружу, имена их совпадают с именем методов и мы таже можем их кастомизировать:
+  
+  Делается это через аннотации @RestResource:
+  
+    @RestResource(rel = "by-email", path = "by-email")
+    @Query("SELECT u FROM User u WHERE u.email = LOWER(:email)")
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    @RestResource(rel = "by-lastname", path = "by-lastname")
+    List<User> findByLastNameContainingIgnoreCase(String lastName);
+    
+   Теперь этим методы буду выставлены на ружу по именам которые мы задали:
+   
+      "_links" : {
+        "by-email" : {
+          "href" : "http://localhost:8080/api/users/search/by-email{?email}",
+          "templated" : true
+        },
+        "by-lastname" : {
+          "href" : "http://localhost:8080/api/users/search/by-lastname{?lastName}",
+          "templated" : true
+        },
+        "self" : {
+          "href" : "http://localhost:8080/api/users/search"
+        }
+      }
+    }
+    
+  Тажке можно подключить зависимость:
+  Spring REST and HAL Browser - https://www.baeldung.com/spring-rest-hal
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-rest-hal-browser</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+  Заглавная страница будет доступна через API здесь hal browser в таком виде позваляет отдавать не только Get запросы но и другие запросы.
+  
+  В свежих версиях Spring, вместо spring-data-rest-hal-browser нужно использовать spring-data-rest-hal-explorer
+  При проблеме с Lombok с новыми JDK поднимите его версию до последней.
+  
+  В IDEA появился инструмент который позволяет отправлять запросы Tools / HTTP client / Show HTTP Request Hostory
+  Можно скопировать 
+        POST http://localhost:8080/api/users
+        Content-Type: application/json
+
+        {
+         "email": "test@test.com",
+         "firstName": "Test",
+         "lastName": "Test",
+         "password": "test",
+         "roles": [ "ROLE_USER"]
+        }
+  Что создаст нового юзера 
+        
+        PATCH http://localhost:8080/api/users/1
+        Content-Type: application/json
+
+        {
+          "lastName": "User+Last"
+        }
+  Данным запросом поменяем lastName у user 1
+  HAL vs HATEOAS - https://stackoverflow.com/questions/25819477/548473 (HAL реализация правила HATEOAS в виде запросов такого вида).
+  
+  Сколько кода надобыло написать чтобы сделать это вручную, и сколько мы написали используя Spring Data Rest
+  
+  3.2 Конфигурирование Jackson 
+  
+  commit: https://github.com/StringerDM/bootjava/commit/3cba92bbb7c392e258c9ff86cfbd0ea39a2cb895
+  
+  Поговорим немножко про сериализацию / десериализацию Jackson - это библиотека которая по умолчанию используется Spring Boot
+  Если мы посмотрим на вывод юзеров в нашем приложении то увидим здесь поле new:
+  
+  http://localhost:8080/api/users/
+  ...
+  "roles" : [ "ROLE_USER" ],
+      "new" : false,
+      "_links" : {
+  ...
+  
+  Это метод isNew в нашем BaseEntity, по умолчанию Jackson сериализует / десериализует через getters / setters
+  В курсе TopJava мы решали это через переопределение ObjectMapper - для всего приложения запрещали смотреть на getters / setters
+  и разрешали поля. 
+  
+  В Spring Boot можно сделать эти настроки через config application, мы можем сказать что
+  
+  # Jackson Serialization Issue Resolver
+  #  jackson:
+  #    visibility.field: any - сериализуем / десериализуем только поля
+  #    visibility.getter: none
+  #    visibility.setter: none - не смотрим на getters / setters
+  #    visibility.is-getter: none и is getters (для boolean полей).
+  
+  Запустим приложение и увидим что поля isNew уйдут но зато появятся поля links - Spring Data Rest наши Entity оборачивает в ресурс 
+  в этом ресурсе есть линки соответственно есть такие поля и он их выводит, т.е. через Spring Data Rest у нас не полчается сделатьэ
+  общее решение для всего приложения (поэтому уберем эту конфигурацию). И мы вместо общего решение сделаем стандартное:
+    @JsonIgnore
+    @Override
+    public boolean isNew() {
+        return id == null;
+    }
+    
+  Common application JSON properties - https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#json-properties
+  Аннотации Jackson - https://nsergey.com/jackson-annotations/
+  
+  Также наш метод не работает для hibernate lazy объектов - используем его только для проинициализированных сущностей.
+    // doesn't work for hibernate lazy proxy
+    public int id() {
+        Assert.notNull(id, "Entity must have id");
+        return id;
+    }
 </details>
-
+<details>
+  <summary>3 Spring Data REST + HATEOAS</summary>
+  3.1 Spring Data REST
+</details>
